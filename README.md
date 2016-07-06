@@ -1,5 +1,5 @@
 # terminal-trading-chart
-A more useful text only chart system based on Unicode glyphs
+A command line chart system based on Unicode glyphs
 
 <img src="https://github.com/fabrizioschiavi/terminal-trading-graph/blob/master/%24chart.png" alt="Sample terminal chart using PragmataPro font">
 
