@@ -1,5 +1,7 @@
 # Terminal Trading Chart
 
+![Terminal Trading Chart on MacOS using PragmataPro font](terminal_trading_chart_2026.png)
+
 A terminal-based trading chart that visualizes price action with volume-weighted buy/sell pressure. Each candlestick is displayed as a vertical column where **green (top)** represents buying pressure and **red (bottom)** represents selling pressure, with glyph thickness indicating volume intensity.
 
 Based on the original concept by [Fabrizio Schiavi](https://fsd.it/) designed in 2016.
