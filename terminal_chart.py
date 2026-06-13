@@ -120,7 +120,7 @@ def auto_dec(price_max):
     return 0
 
 
-def render(rows, ticker: str = "", chart_height: int = 32):
+def render(rows, ticker: str = "", chart_height: int = 32, interval: str = "1d"):
     try:
         t_cols = os.get_terminal_size().columns
     except OSError:
@@ -210,9 +210,22 @@ def render(rows, ticker: str = "", chart_height: int = 32):
         line_parts.append(RESET)
         lines.append("".join(line_parts))
 
-    lines.append(_date_axis(dates, axis_w, cols))
+    lines.append(_date_axis(dates, axis_w, cols, interval))
     lines.append("")
-    _legend(lines)
+
+    # ── Top-volume timestamps (for the legend line) ────────────────────────
+    fmt_date_label = _date_formatter(dates, interval)
+    # Pair (volume, date), sort descending, take top 3 unique labels
+    vol_date_pairs = sorted(zip(volumes, dates), key=lambda x: x[0], reverse=True)
+    top_labels = []
+    for v, d in vol_date_pairs:
+        lbl = fmt_date_label(d)
+        if lbl not in top_labels:
+            top_labels.append(lbl)
+        if len(top_labels) == 3:
+            break
+
+    _legend(lines, top_labels)
 
     if sys.platform == "win32":
         import ctypes
@@ -222,21 +235,87 @@ def render(rows, ticker: str = "", chart_height: int = 32):
     print("\n".join(lines))
 
 
-def _date_axis(dates, axis_w, cols):
-    def fmt_date(d):
-        if isinstance(d, (datetime.datetime, datetime.date)):
-            return f"{d.day}-{d.month}"
+def _date_formatter(dates, interval: str = "1d"):
+    """
+    Returns a (fmt_fn, safe_fmt) pair appropriate for the given interval
+    and the span covered by `dates`:
+      - intraday intervals (1m, 5m, 15m, 30m, 60m, 1h, 90m) -> "10:00"
+      - non-intraday, span < ~13 months                     -> "2026-01-01"
+      - non-intraday, span >= ~13 months                    -> "2026"
+    """
+    is_intraday = False
+    iv = interval.strip().lower()
+    num, unit = "", ""
+    for ch in iv:
+        if ch.isdigit():
+            num += ch
+        else:
+            unit += ch
+    if unit in ("m", "h") or iv in ("1h", "60m", "90m"):
+        is_intraday = True
+
+    def fmt_year(d):
+        return str(d.year)
+
+    def fmt_month(d):
+        return f"{d.year:04d}-{d.month:02d}-01"
+
+    # Se i dati intraday coprono più di un giorno, includi anche la data
+    # per evitare ambiguità (es. "11:00" di giorni diversi)
+    multi_day = False
+    if is_intraday and len(dates) > 1:
         try:
-            return f"{d.day}-{d.month}"
+            days = {(d.year, d.month, d.day) for d in dates}
+            multi_day = len(days) > 1
         except AttributeError:
-            return str(d)[:5]
+            multi_day = False
 
-    left = fmt_date(dates[0])
-    mid = fmt_date(dates[len(dates) // 2])
-    right = fmt_date(dates[-1])
+    def fmt_intraday(d):
+        if multi_day:
+            return f"{d.month:02d}-{d.day:02d} {d.hour:02d}:{d.minute:02d}"
+        return f"{d.hour:02d}:{d.minute:02d}"
 
-    left_pos = 0
-    mid_pos = (len(dates) // 2) * 2
+    if is_intraday:
+        fmt_fn = fmt_intraday
+    else:
+        first, last = dates[0], dates[-1]
+        try:
+            span_days = (last - first).days if hasattr(last - first, "days") else 9999
+        except TypeError:
+            span_days = 9999
+        if span_days >= 400:
+            fmt_fn = fmt_year
+        else:
+            fmt_fn = fmt_month
+
+    def safe_fmt(d):
+        try:
+            return fmt_fn(d)
+        except AttributeError:
+            return str(d)[:10]
+
+    return safe_fmt
+
+
+def _date_axis(dates, axis_w, cols, interval: str = "1d"):
+    """
+    Build the X-axis line with 3 date labels (start / middle / end),
+    formatted according to the requested interval:
+      - yearly  intervals (1mo with multi-year span, 3mo, 1y, etc. spanning years)
+                -> "2020"   "2023"   "2026"
+      - monthly intervals (1mo, 1wk within a year span)
+                -> "2026-01-01" "2026-03-01" "2026-06-01"
+      - intraday intervals (1m, 5m, 15m, 30m, 60m, 1h, 90m)
+                -> "10:00"  "12:00"  "14:00"
+    """
+    safe_fmt = _date_formatter(dates, interval)
+
+    left  = safe_fmt(dates[0])
+    mid   = safe_fmt(dates[len(dates) // 2])
+    right = safe_fmt(dates[-1])
+
+    left_pos  = 0
+    mid_pos   = (len(dates) // 2) * 2
     right_pos = (len(dates) - 1) * 2
     total_chars = cols * 2
     row = [" "] * total_chars
@@ -255,18 +334,23 @@ def _date_axis(dates, axis_w, cols):
     return BG_DARK + FG_LGRAY + prefix + "".join(row) + RESET
 
 
-def _legend(lines):
+def _legend(lines, top_labels=None):
     U2502, U2503, U2588 = "\u2502", "\u2503", "\u2588"
     U2219, U22C5 = "\u2219", "\u22c5"
-    R, G, L = FG_RED, FG_GREEN, FG_LGRAY
+    R, G, L, Y = FG_RED, FG_GREEN, FG_LGRAY, FG_YELLOW
 
     def row(sym, s_label, b_label):
         return (BG_DARK + R + sym + " " + L + s_label.ljust(40) +
                 G + sym + " " + L + b_label + RESET)
 
+    if top_labels:
+        vol_line = "  " + L + "Highest volume: " + Y + "  ".join(top_labels) + L
+    else:
+        vol_line = "  " + G + "GREEN ↑" + L + " = buying (top)        " + R + "RED ↓" + L + " = selling (bottom)"
+
     lines += [
         BG_DARK + RESET,
-        "  " + G + "GREEN ↑" + L + " = buying (top)        " + R + "RED ↓" + L + " = selling (bottom)",
+        vol_line,
         "",
         row(U2502, "normal volume   (< 2× median)",
                    "normal volume   (< 2× median)"),
@@ -304,6 +388,24 @@ def demo_data():
     return rows
 
 
+def _period_to_days(period: str) -> int:
+    """
+    Parse a Yahoo-Finance-style period string ('24mo', '90d', '2y', '6wk', ...)
+    into an approximate number of calendar days. Falls back to 90 days
+    if the string can't be parsed.
+    """
+    period = period.strip().lower()
+    units = [("mo", 30), ("wk", 7), ("y", 365), ("d", 1)]
+    for suffix, mult in units:
+        if period.endswith(suffix):
+            num_part = period[:-len(suffix)]
+            try:
+                return max(1, int(num_part) * mult)
+            except ValueError:
+                break
+    return 90
+
+
 def main():
     ticker = sys.argv[1] if len(sys.argv) > 1 else "BTC-EUR"
     period = sys.argv[2] if len(sys.argv) > 2 else "60d"
@@ -324,8 +426,7 @@ def main():
         print("  Fetching data...")
         
         end_date = datetime.datetime.now()
-        days_map = {"60d": 60, "30d": 30, "90d": 90, "1mo": 30, "2mo": 60, "3mo": 90, "6mo": 180, "1y": 365}
-        days = days_map.get(period, 90)
+        days = _period_to_days(period)
         start_date = end_date - datetime.timedelta(days=days)
         
         df = yf.download(
@@ -359,13 +460,13 @@ def main():
             for idx, r in df.iterrows()
         ]
         print(f"  ✓ {len(raw)} bars downloaded.\n")
-        render(raw, ticker=ticker.upper())
+        render(raw, ticker=ticker.upper(), interval=interval)
         
     except Exception as e:
         print(f"\n  ✗ Download failed: {e}\n")
         print("  → Using DEMO mode:\n")
         raw = demo_data()
-        render(raw, ticker=f"{ticker.upper()} (DEMO)")
+        render(raw, ticker=f"{ticker.upper()} (DEMO)", interval=interval)
 
 
 if __name__ == "__main__":

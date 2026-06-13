@@ -30,7 +30,7 @@ pip install yfinance pandas
 ### Download the script
 
 ```bash
-curl -O https://raw.githubusercontent.com/fabrizioschiavi/terminal-trading-chart/main/terminal_chart.py
+curl -O https://raw.githubusercontent.com/fabrizioschiavi/terminal-trading-chart/terminal_chart.py
 chmod +x terminal_chart.py
 ```
 
