@@ -117,8 +117,8 @@ Yahoo Finance does not provide an official complete ticker list, but here are re
 ### Recommended Ticker Lists
 
 1. **[Yahoo Finance Ticker Lookup](https://finance.yahoo.com/lookup/)** - Official search tool
-2. **[NASDAQ Trader Symbols](http://www.nasdaqtrader.com/trader.aspx?id=symbols)** - Official NASDAQ listing (CSV format)
-3. **[NYSE Listed Securities](https://www.nyse.com/listings_directory/stock)** - Official NYSE directory
+2. **[NYSE Listed Securities](https://www.nyse.com/listings_directory/stock)** - Official NYSE directory
+3. **[All the tickers of the world](https://github.com/adanos-software/free-ticker-database)** - Free Ticker Database
 
 ### Common Ticker Formats
 
