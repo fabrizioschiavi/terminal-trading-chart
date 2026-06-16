@@ -260,4 +260,4 @@ Contributions welcome! Please submit issues and pull requests on GitHub.
 ---
 
 **Happy trading!**
-```
+
